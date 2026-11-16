@@ -5,49 +5,203 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MAILON CLIP AI</title>
 <style>
-body {
-background: #10101a;
-color: white;
-font-family: Arial, sans-serif;
-text-align: center;
-padding: 30px 15px;
+*{box-sizing:border-box}
+body{
+ margin:0;
+ font-family:Arial,sans-serif;
+ background:#080b14;
+ color:white;
+ min-height:100vh;
 }
-.container {
-max-width: 550px;
-margin: 50px auto;
-background: #202033;
-padding: 30px;
-border-radius: 18px;
+header{
+ padding:22px 18px;
+ text-align:center;
+ border-bottom:1px solid #252b3b;
 }
-h1 { color: #a78bfa; }
-input {
-width: 90%;
-padding: 14px;
-border-radius: 8px;
-border: none;
-margin: 15px 0;
+.logo{
+ font-size:27px;
+ font-weight:900;
+ letter-spacing:2px;
+ color:#54e6ff;
 }
-button {
-background: #8055ed;
-color: white;
-padding: 14px 25px;
-border: none;
-border-radius: 8px;
-cursor: pointer;
+header p{color:#aab3c5;font-size:13px}
+main{
+ width:92%;
+ max-width:650px;
+ margin:45px auto;
+}
+h1{
+ font-size:32px;
+ text-align:center;
+ margin-bottom:10px;
+}
+.subtitle{
+ text-align:center;
+ color:#aab3c5;
+ line-height:1.6;
+}
+.panel{
+ margin-top:30px;
+ background:#121827;
+ border:1px solid #29354b;
+ padding:25px;
+ border-radius:18px;
+}
+label{
+ display:block;
+ margin-bottom:12px;
+ font-weight:bold;
+}
+input{
+ width:100%;
+ padding:16px;
+ border-radius:10px;
+ border:1px solid #35445d;
+ background:#080e1b;
+ color:white;
+ font-size:15px;
+ outline:none;
+}
+button{
+ width:100%;
+ margin-top:18px;
+ padding:16px;
+ border:0;
+ border-radius:10px;
+ background:linear-gradient(90deg,#00bde9,#5865ff);
+ color:white;
+ font-size:16px;
+ font-weight:bold;
+ cursor:pointer;
+}
+button:disabled{opacity:.6;cursor:wait}
+.status{
+ margin-top:18px;
+ padding:14px;
+ border-radius:10px;
+ background:#0b1220;
+ color:#aab3c5;
+ line-height:1.5;
+ font-size:14px;
+}
+.features{
+ display:grid;
+ grid-template-columns:1fr 1fr;
+ gap:12px;
+ margin-top:25px;
+}
+.feature{
+ background:#121827;
+ border:1px solid #29354b;
+ padding:17px;
+ border-radius:12px;
+ text-align:center;
+}
+.feature strong{display:block;margin-bottom:7px}
+.feature span{font-size:12px;color:#aab3c5}
+footer{
+ text-align:center;
+ padding:30px;
+ color:#78849a;
+ font-size:12px;
+}
+@media(max-width:450px){
+ h1{font-size:26px}
+ .panel{padding:19px}
+ .features{grid-template-columns:1fr}
 }
 </style>
 </head>
 <body>
-<div class="container">
-<h1>MAILON CLIP AI</h1>
-<p>Tu inteligencia artificial para crear clips.</p>
-<h3>Generador automático de clips</h3>
-<input type="url" placeholder="Pega aquí tu enlace de YouTube">
-<br>
-<button onclick="alert('¡Bienvenido a MAILON CLIP AI!')">
-Crear mis clips
-</button>
-<p>Clips automáticos de 40 segundos.</p>
-</div>
+
+<header>
+ <div class="logo">MAILON CLIP AI</div>
+ <p>Inteligencia artificial para crear clips</p>
+</header>
+
+<main>
+ <h1>Generador automático de clips</h1>
+ <p class="subtitle">
+ Convierte tus vídeos en momentos cortos,
+ emocionantes y listos para compartir.
+ </p>
+
+ <section class="panel">
+  <label for="videoUrl">Pega aquí tu enlace de YouTube</label>
+  <input
+   id="videoUrl"
+   type="url"
+   placeholder="https://www.youtube.com/watch?v=..."
+  >
+
+  <button id="createBtn" onclick="createClips()">
+   Crear mis clips
+  </button>
+
+  <div class="status" id="status">
+   Tus clips tendrán una duración de 40 segundos.
+   La inteligencia artificial seleccionará los mejores momentos.
+  </div>
+ </section>
+
+ <section class="features">
+  <div class="feature">
+   <strong>40 segundos</strong>
+   <span>Duración de cada clip</span>
+  </div>
+  <div class="feature">
+   <strong>Selección automática</strong>
+   <span>Detección de momentos destacados</span>
+  </div>
+  <div class="feature">
+   <strong>YouTube</strong>
+   <span>Importación mediante enlaces</span>
+  </div>
+  <div class="feature">
+   <strong>Fácil de usar</strong>
+   <span>Diseñado para todos</span>
+  </div>
+ </section>
+</main>
+
+<footer>
+ © 2026 MAILON CLIP AI · Todos los derechos reservados
+</footer>
+
+<script>
+function createClips(){
+ const input=document.getElementById("videoUrl");
+ const status=document.getElementById("status");
+ const btn=document.getElementById("createBtn");
+ const url=input.value.trim();
+
+ let valid=false;
+
+ try{
+  const parsed=new URL(url);
+  valid=
+   parsed.hostname==="youtube.com" ||
+   parsed.hostname==="www.youtube.com" ||
+   parsed.hostname==="m.youtube.com" ||
+   parsed.hostname==="youtu.be" ||
+   parsed.hostname==="www.youtube-nocookie.com";
+ }catch(e){valid=false}
+
+ if(!valid){
+  status.textContent="Por favor, pega un enlace válido de YouTube.";
+  return;
+ }
+
+ btn.disabled=true;
+ btn.textContent="Preparando solicitud...";
+
+ status.textContent=
+ "Enlace recibido correctamente. La conexión con el servidor de procesamiento de vídeo todavía está pendiente.";
+
+ btn.disabled=false;
+ btn.textContent="Crear mis clips";
+}
+</script>
+
 </body>
 </html>
