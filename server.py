@@ -16,12 +16,24 @@ class MailonClipHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        if urlparse(self.path).path == "/":
-            self.send_json({
-                "app": "MAILON CLIP AI",
-                "status": "online",
-                "message": "Servidor funcionando correctamente"
-            })
+        path = urlparse(self.path).path
+
+        if path == "/":
+            try:
+                with open("index.html", "rb") as file:
+                    body = file.read()
+
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            except FileNotFoundError:
+                self.send_json({
+                    "error": "No se encontró index.html"
+                }, 500)
+
         else:
             self.send_json({"error": "Ruta no encontrada"}, 404)
 
@@ -30,19 +42,23 @@ class MailonClipHandler(BaseHTTPRequestHandler):
             self.send_json({"error": "Ruta no encontrada"}, 404)
             return
 
-        length = int(self.headers.get("Content-Length", 0))
-        data = json.loads(self.rfile.read(length) or b"{}")
-        video_url = data.get("url", "")
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            data = json.loads(self.rfile.read(length) or b"{}")
+            video_url = data.get("url", "").strip()
 
-        if "youtube.com/" not in video_url and "youtu.be/" not in video_url:
-            self.send_json({"error": "Enlace de YouTube no válido"}, 400)
-            return
+            if "youtube.com/" not in video_url and "youtu.be/" not in video_url:
+                self.send_json({"error": "Enlace de YouTube no válido"}, 400)
+                return
 
-        self.send_json({
-            "status": "received",
-            "message": "Enlace recibido. Falta conectar el motor de creación de clips.",
-            "duration_seconds": 40
-        }, 202)
+            self.send_json({
+                "status": "received",
+                "message": "Enlace recibido correctamente. Motor de clips pendiente de conexión.",
+                "duration_seconds": 40
+            }, 202)
+
+        except (ValueError, json.JSONDecodeError):
+            self.send_json({"error": "Solicitud no válida"}, 400)
 
 
 port = int(os.environ.get("PORT", 10000))
