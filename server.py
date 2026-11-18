@@ -186,7 +186,7 @@ class MailonClipHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlparse(self.path).path
 
-     if path == "/api/create-clips":
+        if path == "/api/create-clips":
             try:
                 length = int(self.headers.get("Content-Length", 0))
 
