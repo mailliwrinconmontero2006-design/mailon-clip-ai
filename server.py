@@ -186,10 +186,45 @@ class MailonClipHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlparse(self.path).path
 
-        if path == "/api/create-clips":
-            self.send_json({
-                "error": "Para esta versión, sube un archivo de video autorizado. La importación directa de enlaces necesita una conexión compatible."
-            }, 501)
+       if path == "/api/create-clips":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+
+                if length <= 0 or length > 10000:
+                    self.send_json({
+                        "error": "Solicitud no válida."
+                    }, 400)
+                    return
+
+                body = self.rfile.read(length)
+                data = json.loads(body.decode("utf-8"))
+
+                video_url = data.get("url", "").strip()
+                parsed = urlparse(video_url)
+
+                allowed_hosts = {
+                    "youtube.com",
+                    "www.youtube.com",
+                    "m.youtube.com",
+                    "youtu.be"
+                }
+
+                if parsed.scheme != "https" or parsed.hostname not in allowed_hosts:
+                    self.send_json({
+                        "error": "Introduce un enlace válido de YouTube."
+                    }, 400)
+                    return
+
+                self.send_json({
+                    "status": "received",
+                    "message": "Enlace recibido correctamente. Para procesar el vídeo necesitamos acceso autorizado al archivo audiovisual.",
+                    "url": video_url
+                }, 202)
+
+            except Exception:
+                self.send_json({
+                    "error": "No se pudo validar el enlace."
+                }, 400)
             return
 
         if path != "/api/upload":
