@@ -5,6 +5,10 @@ import uuid
 import threading
 import subprocess
 import traceback
+import socket
+import ipaddress
+import urllib.request
+import urllib.error
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, unquote
@@ -33,9 +37,19 @@ CLIPS_DIR.mkdir(exist_ok=True)
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 
 MAX_UPLOAD = 500 * 1024 * 1024
+MAX_URL_BODY = 64 * 1024
 CLIP_SECONDS = 40
 ALLOWED_EXTENSIONS = {
     ".mp4", ".mov", ".mkv", ".webm", ".avi"
+}
+
+ALLOWED_VIDEO_TYPES = {
+    "video/mp4": ".mp4",
+    "video/quicktime": ".mov",
+    "video/x-matroska": ".mkv",
+    "video/webm": ".webm",
+    "video/x-msvideo": ".avi",
+    "application/octet-stream": None
 }
 
 WHISPER_MODEL_NAME = os.environ.get(
@@ -111,6 +125,187 @@ def get_video_duration(video_path):
     seconds = float(match.group(3))
 
     return hours * 3600 + minutes * 60 + seconds
+
+
+def start_video_job(input_path):
+    """Registra un trabajo y lo inicia en segundo plano."""
+    job_id = uuid.uuid4().hex
+
+    with LOCK:
+        JOBS[job_id] = {
+            "id": job_id,
+            "status": "queued",
+            "progress": 0,
+            "message": "Video recibido correctamente.",
+            "clips": []
+        }
+
+    thread = threading.Thread(
+        target=process_video,
+        args=(job_id, input_path),
+        daemon=True
+    )
+    thread.start()
+
+    return job_id
+
+
+# ==========================================
+# VALIDACIÓN Y DESCARGA DE ENLACES DIRECTOS
+# ==========================================
+
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # No seguir redirecciones para evitar que una URL externa
+        # redirija la descarga hacia una dirección privada.
+        return None
+
+
+def validate_public_video_url(url):
+    parsed = urlparse(url)
+
+    if parsed.scheme.lower() != "https":
+        raise ValueError(
+            "Por seguridad, los enlaces directos deben comenzar con https://"
+        )
+
+    if not parsed.hostname:
+        raise ValueError("El enlace no contiene un dominio válido.")
+
+    if parsed.username or parsed.password:
+        raise ValueError("No se permiten credenciales dentro del enlace.")
+
+    if parsed.port not in (None, 443):
+        raise ValueError("El enlace utiliza un puerto no permitido.")
+
+    hostname = parsed.hostname.rstrip(".").lower()
+
+    if hostname in {"localhost"} or hostname.endswith(".localhost"):
+        raise ValueError("Ese dominio no está permitido.")
+
+    try:
+        addresses = socket.getaddrinfo(
+            hostname, 443, type=socket.SOCK_STREAM
+        )
+    except socket.gaierror:
+        raise ValueError("No se pudo encontrar el servidor del enlace.")
+
+    if not addresses:
+        raise ValueError("No se pudo verificar el servidor del enlace.")
+
+    for address in addresses:
+        ip = ipaddress.ip_address(address[4][0])
+        if not ip.is_global:
+            raise ValueError(
+                "El enlace apunta a una dirección no pública y fue bloqueado."
+            )
+
+    return parsed
+
+
+def download_direct_video(url, destination):
+    parsed = validate_public_video_url(url)
+
+    path_extension = Path(
+        unquote(parsed.path)
+    ).suffix.lower()
+
+    if path_extension and path_extension not in ALLOWED_EXTENSIONS:
+        raise ValueError(
+            "El enlace debe apuntar directamente a un archivo de video compatible."
+        )
+
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "MAILON-CLIP-AI/1.0",
+            "Accept": "video/*,application/octet-stream"
+        },
+        method="GET"
+    )
+
+    opener = urllib.request.build_opener(NoRedirectHandler())
+
+    try:
+        response = opener.open(request, timeout=30)
+    except urllib.error.HTTPError as error:
+        if 300 <= error.code < 400:
+            raise ValueError(
+                "El servidor redirigió el enlace. Usa la URL directa del archivo de video."
+            )
+        raise ValueError(
+            f"No se pudo abrir el enlace (HTTP {error.code})."
+        )
+    except Exception as error:
+        raise ValueError(
+            f"No se pudo descargar el video: {error}"
+        )
+
+    with response:
+        content_type = (
+            response.headers.get("Content-Type", "")
+            .split(";")[0]
+            .strip()
+            .lower()
+        )
+
+        if content_type not in ALLOWED_VIDEO_TYPES:
+            raise ValueError(
+                "El enlace no parece ser un archivo de video compatible."
+            )
+
+        content_length = response.headers.get("Content-Length")
+        if content_length:
+            try:
+                if int(content_length) > MAX_UPLOAD:
+                    raise ValueError(
+                        "El video supera el límite de 500 MB."
+                    )
+            except ValueError as error:
+                if "supera" in str(error):
+                    raise
+                raise ValueError("El servidor indicó un tamaño inválido.")
+
+        extension = path_extension
+
+        if not extension:
+            extension = ALLOWED_VIDEO_TYPES.get(content_type)
+
+        if not extension:
+            raise ValueError(
+                "No se pudo identificar el formato del video. Usa un enlace MP4 directo."
+            )
+
+        if extension not in ALLOWED_EXTENSIONS:
+            raise ValueError("Formato de video no permitido.")
+
+        total = 0
+
+        try:
+            with destination.open("wb") as output:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+
+                    total += len(chunk)
+
+                    if total > MAX_UPLOAD:
+                        raise ValueError(
+                            "El video supera el límite de 500 MB."
+                        )
+
+                    output.write(chunk)
+
+        except Exception:
+            destination.unlink(missing_ok=True)
+            raise
+
+    if total == 0:
+        destination.unlink(missing_ok=True)
+        raise ValueError("El enlace no entregó ningún archivo.")
+
+    return extension
 
 
 # ==========================================
@@ -475,7 +670,9 @@ class MailonClipHandler(BaseHTTPRequestHandler):
             self.send_json({
                 "status": "online",
                 "app": "MAILON CLIP AI",
-                "clip_seconds": CLIP_SECONDS
+                "clip_seconds": CLIP_SECONDS,
+                "url_import": "direct_video_links",
+                "youtube": "recognized_but_not_downloaded"
             })
             return
 
@@ -548,13 +745,7 @@ class MailonClipHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
 
         if path == "/api/create-clips":
-            self.send_json({
-                "error": (
-                    "La importación mediante enlaces todavía "
-                    "no está habilitada. Sube un video desde "
-                    "tu dispositivo."
-                )
-            }, 501)
+            self.handle_url_import()
             return
 
         if path != "/api/upload":
@@ -669,7 +860,6 @@ class MailonClipHandler(BaseHTTPRequestHandler):
                 args=(job_id, input_path),
                 daemon=True
             )
-
             thread.start()
 
             self.send_json({
@@ -684,6 +874,109 @@ class MailonClipHandler(BaseHTTPRequestHandler):
 
             self.send_json({
                 "error": "Error al recibir el video.",
+                "details": str(error)
+            }, 500)
+
+    def handle_url_import(self):
+        try:
+            content_length = int(
+                self.headers.get("Content-Length", "0")
+            )
+
+            if content_length <= 0 or content_length > MAX_URL_BODY:
+                self.send_json(
+                    {"error": "Envía un enlace válido."},
+                    400
+                )
+                return
+
+            raw_body = self.rfile.read(content_length)
+            data = json.loads(raw_body.decode("utf-8"))
+            url = str(data.get("url", "")).strip()
+
+            if not url:
+                self.send_json(
+                    {"error": "Pega el enlace del video."},
+                    400
+                )
+                return
+
+            parsed = urlparse(url)
+            hostname = (parsed.hostname or "").lower()
+
+            youtube_hosts = {
+                "youtube.com",
+                "www.youtube.com",
+                "m.youtube.com",
+                "youtu.be",
+                "www.youtube-nocookie.com"
+            }
+
+            if hostname in youtube_hosts or hostname.endswith(".youtube.com"):
+                self.send_json({
+                    "error": (
+                        "Reconocimos tu enlace de YouTube. En esta versión "
+                        "no descargamos videos directamente desde YouTube. "
+                        "Si tienes los derechos o autorización, descarga o "
+                        "exporta tu propio archivo y súbelo desde tu dispositivo."
+                    ),
+                    "code": "YOUTUBE_AUTHORIZATION_REQUIRED"
+                }, 422)
+                return
+
+            job_id = uuid.uuid4().hex
+            temporary_path = UPLOAD_DIR / (job_id + ".download")
+
+            try:
+                extension = download_direct_video(
+                    url,
+                    temporary_path
+                )
+
+                final_path = UPLOAD_DIR / (job_id + extension)
+                temporary_path.replace(final_path)
+
+                with LOCK:
+                    JOBS[job_id] = {
+                        "id": job_id,
+                        "status": "queued",
+                        "progress": 0,
+                        "message": "Video descargado. Preparando el análisis...",
+                        "clips": []
+                    }
+
+                thread = threading.Thread(
+                    target=process_video,
+                    args=(job_id, final_path),
+                    daemon=True
+                )
+                thread.start()
+
+                self.send_json({
+                    "success": True,
+                    "job_id": job_id,
+                    "status_url": f"/api/jobs/{job_id}",
+                    "message": "Enlace recibido. El video se está procesando."
+                }, 202)
+
+            except Exception:
+                temporary_path.unlink(missing_ok=True)
+                raise
+
+        except json.JSONDecodeError:
+            self.send_json(
+                {"error": "El formato de la solicitud no es válido."},
+                400
+            )
+        except ValueError as error:
+            self.send_json(
+                {"error": str(error)},
+                400
+            )
+        except Exception as error:
+            traceback.print_exc()
+            self.send_json({
+                "error": "No se pudo procesar el enlace.",
                 "details": str(error)
             }, 500)
 
