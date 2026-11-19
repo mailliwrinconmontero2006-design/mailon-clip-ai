@@ -3,193 +3,178 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>MAILON CLIP AI</title>
 
 <style>
-* {
-    box-sizing: border-box;
+*{box-sizing:border-box}
+
+body{
+    margin:0;
+    font-family:Arial,sans-serif;
+    background:#080b14;
+    color:white;
+    min-height:100vh;
 }
 
-body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: #080b14;
-    color: white;
-    min-height: 100vh;
+header{
+    padding:22px 18px;
+    text-align:center;
+    border-bottom:1px solid #252b3b;
 }
 
-header {
-    padding: 22px 18px;
-    text-align: center;
-    border-bottom: 1px solid #252b3b;
+.logo{
+    font-size:27px;
+    font-weight:900;
+    letter-spacing:2px;
+    color:#54e6ff;
 }
 
-.logo {
-    font-size: 27px;
-    font-weight: 900;
-    letter-spacing: 2px;
-    color: #54e6ff;
+header p{color:#aab3c5;font-size:13px}
+
+main{
+    width:92%;
+    max-width:650px;
+    margin:40px auto;
 }
 
-header p {
-    color: #aab3c5;
-    font-size: 13px;
+h1{text-align:center;font-size:30px}
+
+.subtitle{
+    text-align:center;
+    color:#aab3c5;
+    line-height:1.6;
 }
 
-main {
-    width: 92%;
-    max-width: 650px;
-    margin: 40px auto;
+.panel{
+    margin-top:28px;
+    background:#121827;
+    border:1px solid #29354b;
+    padding:24px;
+    border-radius:18px;
 }
 
-h1 {
-    text-align: center;
-    font-size: 30px;
+label{
+    display:block;
+    font-weight:bold;
+    margin-bottom:12px;
 }
 
-.subtitle {
-    text-align: center;
-    color: #aab3c5;
-    line-height: 1.6;
+input[type=url],
+input[type=file]{
+    width:100%;
+    padding:14px;
+    border:1px solid #35445d;
+    border-radius:10px;
+    background:#080e1b;
+    color:white;
 }
 
-.panel {
-    margin-top: 28px;
-    background: #121827;
-    border: 1px solid #29354b;
-    padding: 24px;
-    border-radius: 18px;
+input[type=url]{margin-bottom:20px}
+
+.or{
+    text-align:center;
+    color:#8290a8;
+    font-size:13px;
+    margin:-7px 0 18px;
 }
 
-label {
-    display: block;
-    font-weight: bold;
-    margin-bottom: 12px;
+button{
+    width:100%;
+    margin-top:18px;
+    padding:16px;
+    border:0;
+    border-radius:10px;
+    background:linear-gradient(90deg,#00bde9,#5865ff);
+    color:white;
+    font-size:16px;
+    font-weight:bold;
+    cursor:pointer;
 }
 
-input[type=file] {
-    width: 100%;
-    padding: 14px;
-    border: 1px solid #35445d;
-    border-radius: 10px;
-    background: #080e1b;
-    color: white;
+button:disabled{opacity:.5;cursor:wait}
+
+.status{
+    margin-top:18px;
+    padding:15px;
+    border-radius:10px;
+    background:#0b1220;
+    color:#c1ccdf;
+    line-height:1.6;
+    font-size:14px;
+    overflow-wrap:anywhere;
 }
 
-button {
-    width: 100%;
-    margin-top: 18px;
-    padding: 16px;
-    border: 0;
-    border-radius: 10px;
-    background: linear-gradient(90deg, #00bde9, #5865ff);
-    color: white;
-    font-size: 16px;
-    font-weight: bold;
-    cursor: pointer;
+.progress{
+    width:100%;
+    height:12px;
+    background:#263249;
+    border-radius:20px;
+    margin-top:15px;
+    overflow:hidden;
 }
 
-button:disabled {
-    opacity: .5;
-    cursor: wait;
+.bar{
+    width:0%;
+    height:100%;
+    background:linear-gradient(90deg,#00bde9,#5865ff);
+    transition:width .3s;
 }
 
-.status {
-    margin-top: 18px;
-    padding: 15px;
-    border-radius: 10px;
-    background: #0b1220;
-    color: #c1ccdf;
-    line-height: 1.6;
-    font-size: 14px;
-    overflow-wrap: anywhere;
+.features{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin-top:22px;
 }
 
-.progress {
-    width: 100%;
-    height: 12px;
-    background: #263249;
-    border-radius: 20px;
-    margin-top: 15px;
-    overflow: hidden;
+.feature{
+    background:#121827;
+    border:1px solid #29354b;
+    padding:17px;
+    border-radius:12px;
+    text-align:center;
 }
 
-.bar {
-    width: 0%;
-    height: 100%;
-    background: linear-gradient(90deg, #00bde9, #5865ff);
-    transition: width .3s;
+.feature strong{
+    display:block;
+    margin-bottom:7px;
 }
 
-.features {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    margin-top: 22px;
+.feature span{
+    font-size:12px;
+    color:#aab3c5;
 }
 
-.feature {
-    background: #121827;
-    border: 1px solid #29354b;
-    padding: 17px;
-    border-radius: 12px;
-    text-align: center;
+#results{margin-top:20px}
+
+.clip{
+    padding:15px;
+    margin-top:12px;
+    background:#0b1220;
+    border:1px solid #29354b;
+    border-radius:10px;
 }
 
-.feature strong {
-    display: block;
-    margin-bottom: 7px;
+.clip a{color:#54e6ff;font-weight:bold}
+
+.note{
+    color:#aab3c5;
+    font-size:12px;
+    line-height:1.6;
+    margin-top:14px;
 }
 
-.feature span {
-    font-size: 12px;
-    color: #aab3c5;
+footer{
+    text-align:center;
+    padding:30px;
+    color:#78849a;
+    font-size:12px;
 }
 
-#results {
-    margin-top: 20px;
-}
-
-.clip {
-    padding: 15px;
-    margin-top: 12px;
-    background: #0b1220;
-    border: 1px solid #29354b;
-    border-radius: 10px;
-}
-
-.clip a {
-    color: #54e6ff;
-    font-weight: bold;
-}
-
-.note {
-    color: #aab3c5;
-    font-size: 12px;
-    line-height: 1.6;
-    margin-top: 14px;
-}
-
-footer {
-    text-align: center;
-    padding: 30px;
-    color: #78849a;
-    font-size: 12px;
-}
-
-@media(max-width:450px) {
-    h1 {
-        font-size: 25px;
-    }
-
-    .panel {
-        padding: 18px;
-    }
-
-    .features {
-        grid-template-columns: 1fr;
-    }
+@media(max-width:450px){
+    h1{font-size:25px}
+    .panel{padding:18px}
+    .features{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -206,11 +191,25 @@ footer {
     <h1>Generador automático de clips</h1>
 
     <p class="subtitle">
-        Sube un vídeo y deja que MAILON CLIP AI
-        busque momentos interesantes y cree clips de 40 segundos.
+        Pega un enlace directo de vídeo o sube un vídeo
+        desde tu dispositivo. MAILON CLIP AI buscará
+        momentos interesantes y creará clips de 40 segundos.
     </p>
 
     <section class="panel">
+
+        <label for="videoUrl">Pegar enlace del vídeo</label>
+
+        <input
+            id="videoUrl"
+            type="url"
+            placeholder="https://ejemplo.com/video.mp4"
+            autocomplete="url"
+        >
+
+        <div class="or">
+            — O SUBE UN VÍDEO DESDE TU DISPOSITIVO —
+        </div>
 
         <label for="videoFile">
             Selecciona tu vídeo
@@ -231,16 +230,22 @@ footer {
         </div>
 
         <div class="status" id="status">
-            Selecciona un vídeo para comenzar.
+            Pega un enlace directo HTTPS o selecciona
+            un vídeo para comenzar.
             Cada clip tendrá una duración de 40 segundos.
         </div>
 
         <div id="results"></div>
 
         <p class="note">
-            Formatos permitidos: MP4, MOV, MKV, WEBM y AVI.
-            Tamaño máximo: 500 MB.
-            Sube únicamente vídeos que tengas autorización para utilizar.
+            Formatos permitidos al subir: MP4, MOV, MKV,
+            WEBM y AVI. Tamaño máximo: 500 MB.
+            Los enlaces deben ser HTTPS y apuntar directamente
+            a un archivo de vídeo.
+            YouTube se reconoce, pero todavía no se descarga
+            directamente.
+            Utiliza únicamente vídeos que tengas autorización
+            para utilizar.
         </p>
 
     </section>
@@ -278,57 +283,66 @@ footer {
 <script>
 
 const fileInput = document.getElementById("videoFile");
+const urlInput = document.getElementById("videoUrl");
 const button = document.getElementById("createBtn");
 const statusBox = document.getElementById("status");
 const bar = document.getElementById("bar");
 const results = document.getElementById("results");
 
-
-function showStatus(message) {
+function showStatus(message){
     statusBox.textContent = message;
 }
 
-
-function finishButton() {
+function finishButton(){
     button.disabled = false;
     button.textContent = "Crear mis clips";
 }
 
-
-function finish(message) {
+function finish(message){
     showStatus(message);
     finishButton();
 }
 
-
-function createClips() {
+function createClips(){
 
     const file = fileInput.files[0];
+    const url = urlInput.value.trim();
 
     results.replaceChildren();
     bar.style.width = "0%";
 
-    if (!file) {
-        showStatus("Primero selecciona un vídeo.");
+    // Si hay un archivo seleccionado, se utiliza ese archivo.
+    if(file){
+        uploadVideo(file);
         return;
     }
 
-    if (file.size > 500 * 1024 * 1024) {
+    // Si no hay archivo, se utiliza el enlace.
+    if(url){
+        importVideoUrl(url);
+        return;
+    }
+
+    showStatus(
+        "Pega un enlace directo o selecciona un vídeo desde tu dispositivo."
+    );
+}
+
+function uploadVideo(file){
+
+    if(file.size > 500 * 1024 * 1024){
         showStatus("El vídeo supera el límite de 500 MB.");
         return;
     }
 
     const allowed = [
-        ".mp4",
-        ".mov",
-        ".mkv",
-        ".webm",
-        ".avi"
+        ".mp4",".mov",".mkv",".webm",".avi"
     ];
 
-    const extension = "." + file.name.split(".").pop().toLowerCase();
+    const extension =
+        "." + file.name.split(".").pop().toLowerCase();
 
-    if (!allowed.includes(extension)) {
+    if(!allowed.includes(extension)){
         showStatus("Este formato de vídeo no está permitido.");
         return;
     }
@@ -340,19 +354,15 @@ function createClips() {
 
     const request = new XMLHttpRequest();
 
-    request.open("POST", "/api/upload");
-
-    // IMPORTANTE:
-    // Enviar el video como multipart/form-data.
-    // El navegador configura automáticamente el boundary.
+    request.open("POST","/api/upload");
 
     const formData = new FormData();
 
-    formData.append("video", file, file.name);
+    formData.append("video",file,file.name);
 
-    request.upload.onprogress = function(event) {
+    request.upload.onprogress = function(event){
 
-        if (event.lengthComputable) {
+        if(event.lengthComputable){
 
             const percent = Math.round(
                 event.loaded / event.total * 100
@@ -360,28 +370,27 @@ function createClips() {
 
             bar.style.width = (percent * 0.4) + "%";
 
-            showStatus(
-                "Subiendo vídeo: " + percent + "%"
-            );
+            showStatus("Subiendo vídeo: " + percent + "%");
         }
     };
 
-
-    request.onload = function() {
+    request.onload = function(){
 
         let data;
 
-        try {
+        try{
             data = JSON.parse(request.responseText);
-        } catch (error) {
+        }catch(error){
             finish("El servidor respondió con un mensaje inesperado.");
             return;
         }
 
-        if (request.status !== 202 || !data.job_id) {
+        if(request.status !== 202 || !data.job_id){
+
             finish(
                 data.error || "No se pudo recibir el vídeo."
             );
+
             return;
         }
 
@@ -394,26 +403,87 @@ function createClips() {
         checkJob(data.job_id);
     };
 
-
-    request.onerror = function() {
-        finish(
-            "No se pudo conectar con el servidor. Inténtalo nuevamente."
-        );
+    request.onerror = function(){
+        finish("No se pudo conectar con el servidor. Inténtalo nuevamente.");
     };
 
-
-    request.onabort = function() {
+    request.onabort = function(){
         finish("La subida fue cancelada.");
     };
-
 
     request.send(formData);
 }
 
+async function importVideoUrl(url){
 
-async function checkJob(jobId) {
+    let parsed;
 
-    try {
+    try{
+        parsed = new URL(url);
+    }catch(error){
+        showStatus("Pega un enlace válido.");
+        return;
+    }
+
+    if(parsed.protocol !== "https:"){
+        showStatus("Por seguridad, el enlace debe comenzar con https://");
+        return;
+    }
+
+    button.disabled = true;
+    button.textContent = "Importando enlace...";
+
+    showStatus("Enviando el enlace a MAILON CLIP AI...");
+
+    try{
+
+        const response = await fetch("/api/create-clips",{
+            method:"POST",
+            headers:{
+                "Content-Type":"application/json"
+            },
+            body:JSON.stringify({url:url})
+        });
+
+        let data;
+
+        try{
+            data = await response.json();
+        }catch(error){
+            finish("El servidor respondió con un mensaje inesperado.");
+            return;
+        }
+
+        if(!response.ok || !data.job_id){
+
+            finish(
+                data.error ||
+                data.message ||
+                "No se pudo procesar ese enlace."
+            );
+
+            return;
+        }
+
+        showStatus(
+            "Enlace recibido. Iniciando análisis del vídeo..."
+        );
+
+        button.textContent = "Analizando vídeo...";
+
+        checkJob(data.job_id);
+
+    }catch(error){
+
+        finish(
+            "No se pudo conectar con el servidor. Inténtalo nuevamente."
+        );
+    }
+}
+
+async function checkJob(jobId){
+
+    try{
 
         const response = await fetch(
             "/api/jobs/" + encodeURIComponent(jobId)
@@ -421,62 +491,54 @@ async function checkJob(jobId) {
 
         const job = await response.json();
 
-        if (!response.ok) {
-            finish(
-                job.error || "No se pudo consultar el trabajo."
-            );
+        if(!response.ok){
+            finish(job.error || "No se pudo consultar el trabajo.");
             return;
         }
 
-        if (job.status === "queued") {
+        if(job.status === "queued"){
 
             showStatus(
                 "Tu vídeo está esperando para comenzar..."
             );
 
-            setTimeout(() => checkJob(jobId), 3000);
-
+            setTimeout(() => checkJob(jobId),3000);
             return;
         }
 
-
-        if (job.status === "processing") {
+        if(job.status === "processing"){
 
             const progress = Number(job.progress || 0);
 
-            bar.style.width = (
-                40 + progress * 0.6
-            ) + "%";
+            bar.style.width = (40 + progress * 0.6) + "%";
 
             showStatus(
                 (job.message || "Procesando vídeo...") +
                 " Progreso: " + progress + "%"
             );
 
-            setTimeout(() => checkJob(jobId), 5000);
-
+            setTimeout(() => checkJob(jobId),5000);
             return;
         }
 
-
-        if (job.status === "completed") {
+        if(job.status === "completed"){
 
             bar.style.width = "100%";
 
+            const clips = job.clips || [];
+
             showStatus(
                 "¡Procesamiento terminado! Clips generados: " +
-                (job.total_clips || job.clips.length)
+                (job.total_clips ?? clips.length)
             );
 
-            displayClips(job.clips || []);
+            displayClips(clips);
 
             finishButton();
-
             return;
         }
 
-
-        if (job.status === "failed") {
+        if(job.status === "failed"){
 
             finish(
                 job.error ||
@@ -487,33 +549,34 @@ async function checkJob(jobId) {
             return;
         }
 
-
         showStatus(
             "Estado del procesamiento: " + job.status
         );
 
-        setTimeout(() => checkJob(jobId), 4000);
+        setTimeout(() => checkJob(jobId),4000);
 
-    } catch (error) {
+    }catch(error){
 
         finish(
             "Se perdió la conexión al consultar el procesamiento."
         );
-
     }
 }
 
-
-function displayClips(clips) {
+function displayClips(clips){
 
     results.replaceChildren();
 
-    if (!clips.length) {
-        showStatus("El procesamiento terminó, pero no se recibieron clips.");
+    if(!clips.length){
+
+        showStatus(
+            "El procesamiento terminó, pero no se recibieron clips."
+        );
+
         return;
     }
 
-    clips.forEach((clip, index) => {
+    clips.forEach((clip,index)=>{
 
         const card = document.createElement("div");
         card.className = "clip";
@@ -526,10 +589,15 @@ function displayClips(clips) {
         const link = document.createElement("a");
 
         link.href = clip.url;
+
         link.textContent =
             "Descargar clip " + (index + 1);
 
-        link.download = clip.name;
+        if(clip.name){
+            link.download = clip.name;
+        }
+
+        link.rel = "noopener";
 
         card.appendChild(title);
         card.appendChild(link);
@@ -537,7 +605,6 @@ function displayClips(clips) {
         results.appendChild(card);
 
     });
-
 }
 
 </script>
