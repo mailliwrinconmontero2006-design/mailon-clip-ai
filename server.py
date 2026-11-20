@@ -9,6 +9,7 @@ import socket
 import ipaddress
 import urllib.request
 import urllib.error
+
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, unquote
@@ -39,6 +40,7 @@ FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 MAX_UPLOAD = 500 * 1024 * 1024
 MAX_URL_BODY = 64 * 1024
 CLIP_SECONDS = 40
+
 ALLOWED_EXTENSIONS = {
     ".mp4", ".mov", ".mkv", ".webm", ".avi"
 }
@@ -52,21 +54,39 @@ ALLOWED_VIDEO_TYPES = {
     "application/octet-stream": None
 }
 
-WHISPER_MODEL_NAME = os.environ.get(
-    "WHISPER_MODEL", "tiny"
-)
+WHISPER_MODEL_NAME = os.environ.get("WHISPER_MODEL", "tiny")
 
 JOBS = {}
 LOCK = threading.Lock()
 
-IMPORTANT_WORDS = {
-    "increíble", "importante", "atención",
-    "nunca", "siempre", "verdad", "problema",
-    "solución", "dinero", "secreto", "resultado",
-    "recuerda", "aprendí", "sorpresa", "mejor",
-    "peor", "historia", "finalmente", "error",
-    "consejo", "descubrí", "imagina", "realmente",
-    "exactamente", "éxito", "porqué", "porque"
+
+# ==========================================
+# PALABRAS PARA EL ANÁLISIS INTELIGENTE
+# ==========================================
+
+HOOK_WORDS = {
+    "increíble", "atención", "secreto", "descubrí",
+    "imagina", "sorpresa", "nadie", "jamás",
+    "nunca", "siempre", "importante", "resultado",
+    "verdad", "realmente", "exactamente", "finalmente",
+    "error", "éxito", "dinero", "problema", "solución"
+}
+
+STORY_WORDS = {
+    "historia", "entonces", "después", "recuerdo",
+    "pasó", "sucedió", "aprendí", "experiencia",
+    "momento", "principio", "finalmente"
+}
+
+ADVICE_WORDS = {
+    "consejo", "recomiendo", "debes", "deberías",
+    "aprende", "recuerda", "importante", "solución",
+    "evita", "necesitas", "puedes", "haz"
+}
+
+QUESTION_WORDS = {
+    "qué", "cómo", "cuándo", "dónde",
+    "por", "quién", "cuál", "cuánto"
 }
 
 
@@ -128,7 +148,6 @@ def get_video_duration(video_path):
 
 
 def start_video_job(input_path):
-    """Registra un trabajo y lo inicia en segundo plano."""
     job_id = uuid.uuid4().hex
 
     with LOCK:
@@ -155,9 +174,8 @@ def start_video_job(input_path):
 # ==========================================
 
 class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        # No seguir redirecciones para evitar que una URL externa
-        # redirija la descarga hacia una dirección privada.
         return None
 
 
@@ -166,38 +184,41 @@ def validate_public_video_url(url):
 
     if parsed.scheme.lower() != "https":
         raise ValueError(
-            "Por seguridad, los enlaces directos deben comenzar con https://"
+            "Los enlaces directos deben comenzar con https://"
         )
 
     if not parsed.hostname:
         raise ValueError("El enlace no contiene un dominio válido.")
 
     if parsed.username or parsed.password:
-        raise ValueError("No se permiten credenciales dentro del enlace.")
+        raise ValueError("No se permiten credenciales en el enlace.")
 
     if parsed.port not in (None, 443):
         raise ValueError("El enlace utiliza un puerto no permitido.")
 
     hostname = parsed.hostname.rstrip(".").lower()
 
-    if hostname in {"localhost"} or hostname.endswith(".localhost"):
+    if hostname == "localhost" or hostname.endswith(".localhost"):
         raise ValueError("Ese dominio no está permitido.")
 
     try:
         addresses = socket.getaddrinfo(
-            hostname, 443, type=socket.SOCK_STREAM
+            hostname,
+            443,
+            type=socket.SOCK_STREAM
         )
     except socket.gaierror:
         raise ValueError("No se pudo encontrar el servidor del enlace.")
 
     if not addresses:
-        raise ValueError("No se pudo verificar el servidor del enlace.")
+        raise ValueError("No se pudo verificar el servidor.")
 
     for address in addresses:
         ip = ipaddress.ip_address(address[4][0])
+
         if not ip.is_global:
             raise ValueError(
-                "El enlace apunta a una dirección no pública y fue bloqueado."
+                "El enlace apunta a una dirección no pública."
             )
 
     return parsed
@@ -212,7 +233,7 @@ def download_direct_video(url, destination):
 
     if path_extension and path_extension not in ALLOWED_EXTENSIONS:
         raise ValueError(
-            "El enlace debe apuntar directamente a un archivo de video compatible."
+            "El enlace debe apuntar a un video compatible."
         )
 
     request = urllib.request.Request(
@@ -228,14 +249,18 @@ def download_direct_video(url, destination):
 
     try:
         response = opener.open(request, timeout=30)
+
     except urllib.error.HTTPError as error:
         if 300 <= error.code < 400:
             raise ValueError(
-                "El servidor redirigió el enlace. Usa la URL directa del archivo de video."
+                "El servidor redirigió el enlace. "
+                "Necesitas la URL directa del archivo."
             )
+
         raise ValueError(
             f"No se pudo abrir el enlace (HTTP {error.code})."
         )
+
     except Exception as error:
         raise ValueError(
             f"No se pudo descargar el video: {error}"
@@ -255,6 +280,7 @@ def download_direct_video(url, destination):
             )
 
         content_length = response.headers.get("Content-Length")
+
         if content_length:
             try:
                 if int(content_length) > MAX_UPLOAD:
@@ -264,7 +290,10 @@ def download_direct_video(url, destination):
             except ValueError as error:
                 if "supera" in str(error):
                     raise
-                raise ValueError("El servidor indicó un tamaño inválido.")
+
+                raise ValueError(
+                    "El servidor indicó un tamaño inválido."
+                )
 
         extension = path_extension
 
@@ -273,7 +302,7 @@ def download_direct_video(url, destination):
 
         if not extension:
             raise ValueError(
-                "No se pudo identificar el formato del video. Usa un enlace MP4 directo."
+                "No se pudo identificar el formato del video."
             )
 
         if extension not in ALLOWED_EXTENSIONS:
@@ -283,8 +312,10 @@ def download_direct_video(url, destination):
 
         try:
             with destination.open("wb") as output:
+
                 while True:
                     chunk = response.read(1024 * 1024)
+
                     if not chunk:
                         break
 
@@ -309,38 +340,11 @@ def download_direct_video(url, destination):
 
 
 # ==========================================
-# ANÁLISIS DEL CONTENIDO CON IA
+# TRANSCRIPCIÓN AUTOMÁTICA CON WHISPER
 # ==========================================
-# MOTOR DE ANÁLISIS INTELIGENTE
-# ==========================================
-
-HOOK_WORDS = {
-    "increíble", "atención", "secreto", "descubrí",
-    "imagina", "sorpresa", "nadie", "jamás",
-    "nunca", "siempre", "importante", "resultado",
-    "verdad", "realmente", "exactamente", "finalmente",
-    "error", "éxito", "dinero", "problema", "solución"
-}
-
-STORY_WORDS = {
-    "historia", "entonces", "después", "recuerdo",
-    "pasó", "sucedió", "aprendí", "experiencia",
-    "momento", "principio", "finalmente"
-}
-
-ADVICE_WORDS = {
-    "consejo", "recomiendo", "debes", "deberías",
-    "aprende", "recuerda", "importante", "solución",
-    "evita", "necesitas", "puedes", "haz"
-}
-
-QUESTION_WORDS = {
-    "qué", "cómo", "cuándo", "dónde", "por",
-    "quién", "cuál", "cuánto"
-}
-
 
 def transcribe_video(video_path):
+
     if WhisperModel is None:
         return []
 
@@ -373,7 +377,12 @@ def transcribe_video(video_path):
     return transcript
 
 
+# ==========================================
+# ANÁLISIS INTELIGENTE DEL CONTENIDO
+# ==========================================
+
 def score_window(start, end, transcript):
+
     relevant = []
 
     for segment in transcript:
@@ -412,10 +421,7 @@ def score_window(start, end, transcript):
         1.0
     )
 
-    word_count_score = min(
-        len(words) / 100,
-        1.0
-    )
+    word_count_score = min(len(words) / 100, 1.0)
 
     hook_score = min(
         sum(1 for word in words if word in HOOK_WORDS) / 5,
@@ -462,15 +468,15 @@ def score_window(start, end, transcript):
 
 
 def select_best_moments(duration, transcript):
+
     if duration < CLIP_SECONDS:
         raise RuntimeError(
             "El video debe durar al menos 40 segundos."
         )
 
     last_start = duration - CLIP_SECONDS
-    desired_count = int(duration // CLIP_SECONDS)
+    desired_count = max(1, int(duration // CLIP_SECONDS))
 
-    # Selección alternativa cuando no hay transcripción.
     if not transcript:
         if desired_count == 1:
             fallback_starts = [last_start / 2]
@@ -511,11 +517,7 @@ def select_best_moments(duration, transcript):
         candidates.append({
             "start": start,
             "end": end,
-            "score": score_window(
-                start,
-                end,
-                transcript
-            )
+            "score": score_window(start, end, transcript)
         })
 
     candidates.sort(
@@ -526,6 +528,7 @@ def select_best_moments(duration, transcript):
     selected = []
 
     for candidate in candidates:
+
         overlaps = any(
             not (
                 candidate["end"] <= chosen["start"]
@@ -540,12 +543,13 @@ def select_best_moments(duration, transcript):
         if len(selected) >= desired_count:
             break
 
-    # Completar con fragmentos distintos si hace falta.
     if len(selected) < desired_count:
+
         for candidate in sorted(
             candidates,
             key=lambda item: item["start"]
         ):
+
             if candidate in selected:
                 continue
 
@@ -563,17 +567,20 @@ def select_best_moments(duration, transcript):
             if len(selected) >= desired_count:
                 break
 
-    selected.sort(
-        key=lambda item: item["start"]
-    )
+    selected.sort(key=lambda item: item["start"])
 
     return selected
-    # ==========================================
+
+
+# ==========================================
 # GENERADOR DE SUBTÍTULOS AUTOMÁTICOS
 # ==========================================
 
 def format_srt_time(seconds):
-    milliseconds = int(round(max(0, seconds) * 1000))
+
+    milliseconds = int(
+        round(max(0, seconds) * 1000)
+    )
 
     hours = milliseconds // 3600000
     minutes = (milliseconds % 3600000) // 60000
@@ -586,11 +593,17 @@ def format_srt_time(seconds):
     )
 
 
-def create_subtitle_file(output_path, transcript, clip_start):
+def create_subtitle_file(
+    output_path,
+    transcript,
+    clip_start
+):
+
     clip_end = clip_start + CLIP_SECONDS
     subtitle_entries = []
 
     for segment in transcript:
+
         start = max(segment["start"], clip_start)
         end = min(segment["end"], clip_end)
 
@@ -616,10 +629,14 @@ def create_subtitle_file(output_path, transcript, clip_start):
         "\n".join(subtitle_entries),
         encoding="utf-8"
     )
+
+
+# ==========================================
 # CREACIÓN DE CLIPS DE 40 SEGUNDOS
 # ==========================================
 
 def create_clip(input_path, output_path, start):
+
     run_ffmpeg([
         "-y",
         "-ss", str(start),
@@ -638,14 +655,16 @@ def create_clip(input_path, output_path, start):
 
 
 # ==========================================
-# PROCESAMIENTO DEL VIDEO
+# PROCESAMIENTO COMPLETO DEL VIDEO
 # ==========================================
 
 def process_video(job_id, input_path):
+
     job_folder = CLIPS_DIR / job_id
     job_folder.mkdir(exist_ok=True)
 
     try:
+
         update_job(
             job_id,
             status="processing",
@@ -670,6 +689,7 @@ def process_video(job_id, input_path):
 
         try:
             transcript = transcribe_video(input_path)
+
         except Exception as error:
             print("Error de transcripción:", error)
 
@@ -698,6 +718,7 @@ def process_video(job_id, input_path):
         total = len(moments)
 
         for index, moment in enumerate(moments, start=1):
+
             filename = f"clip_{index:03d}.mp4"
             output_path = job_folder / filename
 
@@ -707,17 +728,26 @@ def process_video(job_id, input_path):
                 moment["start"]
             )
 
+            subtitle_filename = f"clip_{index:03d}.srt"
+            subtitle_path = job_folder / subtitle_filename
+
+            create_subtitle_file(
+                subtitle_path,
+                transcript,
+                moment["start"]
+            )
+
             clips.append({
                 "name": filename,
                 "url": f"/clips/{job_id}/{filename}",
+                "subtitles": subtitle_filename,
+                "subtitles_url": f"/clips/{job_id}/{subtitle_filename}",
                 "start": round(moment["start"], 2),
                 "duration": CLIP_SECONDS,
                 "score": round(moment["score"], 3)
             })
 
-            progress = 50 + int(
-                index / total * 45
-            )
+            progress = 50 + int(index / total * 45)
 
             update_job(
                 job_id,
@@ -735,6 +765,7 @@ def process_video(job_id, input_path):
         )
 
     except Exception as error:
+
         traceback.print_exc()
 
         update_job(
@@ -746,8 +777,10 @@ def process_video(job_id, input_path):
         )
 
     finally:
+
         try:
             Path(input_path).unlink(missing_ok=True)
+
         except Exception:
             pass
 
@@ -759,42 +792,56 @@ def process_video(job_id, input_path):
 class MailonClipHandler(BaseHTTPRequestHandler):
 
     def send_json(self, data, status=200):
+
         body = json.dumps(data).encode("utf-8")
 
         self.send_response(status)
+
         self.send_header(
             "Content-Type",
             "application/json; charset=utf-8"
         )
+
         self.send_header(
             "Content-Length",
             str(len(body))
         )
+
         self.send_header(
-            "Access-Control-Allow-Origin", "*"
+            "Access-Control-Allow-Origin",
+            "*"
         )
+
         self.end_headers()
         self.wfile.write(body)
 
     def do_OPTIONS(self):
+
         self.send_response(204)
+
         self.send_header(
-            "Access-Control-Allow-Origin", "*"
+            "Access-Control-Allow-Origin",
+            "*"
         )
+
         self.send_header(
             "Access-Control-Allow-Methods",
             "GET, POST, OPTIONS"
         )
+
         self.send_header(
             "Access-Control-Allow-Headers",
             "Content-Type"
         )
+
         self.end_headers()
 
     def do_GET(self):
+
         path = unquote(urlparse(self.path).path)
 
         if path == "/":
+
             index_path = BASE_DIR / "index.html"
 
             if not index_path.exists():
@@ -804,18 +851,23 @@ class MailonClipHandler(BaseHTTPRequestHandler):
             content = index_path.read_bytes()
 
             self.send_response(200)
+
             self.send_header(
                 "Content-Type",
                 "text/html; charset=utf-8"
             )
+
             self.send_header(
-                "Content-Length", str(len(content))
+                "Content-Length",
+                str(len(content))
             )
+
             self.end_headers()
             self.wfile.write(content)
             return
 
         if path == "/api/health":
+
             self.send_json({
                 "status": "online",
                 "app": "MAILON CLIP AI",
@@ -823,13 +875,16 @@ class MailonClipHandler(BaseHTTPRequestHandler):
                 "url_import": "direct_video_links",
                 "youtube": "recognized_but_not_downloaded"
             })
+
             return
 
         if path.startswith("/api/jobs/"):
+
             job_id = path.split("/")[-1]
 
             with LOCK:
                 job = JOBS.get(job_id)
+
                 if job:
                     job = dict(job)
 
@@ -844,6 +899,7 @@ class MailonClipHandler(BaseHTTPRequestHandler):
             return
 
         if path.startswith("/clips/"):
+
             parts = path.strip("/").split("/")
 
             if len(parts) != 3:
@@ -852,10 +908,21 @@ class MailonClipHandler(BaseHTTPRequestHandler):
 
             job_id, filename = parts[1], parts[2]
 
-            if (
-                not re.fullmatch(r"[a-f0-9]{32}", job_id)
-                or not re.fullmatch(r"clip_\d{3}\.mp4", filename)
-            ):
+            if not re.fullmatch(r"[a-f0-9]{32}", job_id):
+                self.send_error(404)
+                return
+
+            is_video = re.fullmatch(
+                r"clip_\d{3}\.mp4",
+                filename
+            )
+
+            is_subtitle = re.fullmatch(
+                r"clip_\d{3}\.srt",
+                filename
+            )
+
+            if not is_video and not is_subtitle:
                 self.send_error(404)
                 return
 
@@ -865,25 +932,38 @@ class MailonClipHandler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
 
+            if is_video:
+                content_type = "video/mp4"
+            else:
+                content_type = "application/x-subrip; charset=utf-8"
+
             self.send_response(200)
+
             self.send_header(
-                "Content-Type", "video/mp4"
+                "Content-Type",
+                content_type
             )
+
             self.send_header(
                 "Content-Length",
                 str(clip_path.stat().st_size)
             )
+
             self.send_header(
                 "Content-Disposition",
                 f'attachment; filename="{filename}"'
             )
+
             self.end_headers()
 
-            with clip_path.open("rb") as video:
+            with clip_path.open("rb") as file:
+
                 while True:
-                    chunk = video.read(1024 * 1024)
+                    chunk = file.read(1024 * 1024)
+
                     if not chunk:
                         break
+
                     self.wfile.write(chunk)
 
             return
@@ -891,6 +971,7 @@ class MailonClipHandler(BaseHTTPRequestHandler):
         self.send_error(404, "Ruta no encontrada")
 
     def do_POST(self):
+
         path = urlparse(self.path).path
 
         if path == "/api/create-clips":
@@ -902,6 +983,7 @@ class MailonClipHandler(BaseHTTPRequestHandler):
             return
 
         try:
+
             content_length = int(
                 self.headers.get("Content-Length", "0")
             )
@@ -921,7 +1003,8 @@ class MailonClipHandler(BaseHTTPRequestHandler):
                 return
 
             content_type = self.headers.get(
-                "Content-Type", ""
+                "Content-Type",
+                ""
             )
 
             if "multipart/form-data" not in content_type:
@@ -953,12 +1036,15 @@ class MailonClipHandler(BaseHTTPRequestHandler):
             original_name = None
 
             for part in parsed.iter_parts():
+
                 filename = part.get_filename()
 
                 if filename:
+
                     uploaded_file = part.get_payload(
                         decode=True
                     )
+
                     original_name = filename
                     break
 
@@ -1009,6 +1095,7 @@ class MailonClipHandler(BaseHTTPRequestHandler):
                 args=(job_id, input_path),
                 daemon=True
             )
+
             thread.start()
 
             self.send_json({
@@ -1019,6 +1106,7 @@ class MailonClipHandler(BaseHTTPRequestHandler):
             }, 202)
 
         except Exception as error:
+
             traceback.print_exc()
 
             self.send_json({
@@ -1027,7 +1115,9 @@ class MailonClipHandler(BaseHTTPRequestHandler):
             }, 500)
 
     def handle_url_import(self):
+
         try:
+
             content_length = int(
                 self.headers.get("Content-Length", "0")
             )
@@ -1040,7 +1130,11 @@ class MailonClipHandler(BaseHTTPRequestHandler):
                 return
 
             raw_body = self.rfile.read(content_length)
-            data = json.loads(raw_body.decode("utf-8"))
+
+            data = json.loads(
+                raw_body.decode("utf-8")
+            )
+
             url = str(data.get("url", "")).strip()
 
             if not url:
@@ -1061,28 +1155,40 @@ class MailonClipHandler(BaseHTTPRequestHandler):
                 "www.youtube-nocookie.com"
             }
 
-            if hostname in youtube_hosts or hostname.endswith(".youtube.com"):
+            if (
+                hostname in youtube_hosts
+                or hostname.endswith(".youtube.com")
+            ):
+
                 self.send_json({
                     "error": (
-                        "Reconocimos tu enlace de YouTube. En esta versión "
-                        "no descargamos videos directamente desde YouTube. "
-                        "Si tienes los derechos o autorización, descarga o "
+                        "Reconocimos tu enlace de YouTube. "
+                        "Esta versión no descarga videos directamente "
+                        "desde YouTube. Si tienes los derechos o autorización, "
                         "exporta tu propio archivo y súbelo desde tu dispositivo."
                     ),
                     "code": "YOUTUBE_AUTHORIZATION_REQUIRED"
                 }, 422)
+
                 return
 
             job_id = uuid.uuid4().hex
-            temporary_path = UPLOAD_DIR / (job_id + ".download")
+
+            temporary_path = UPLOAD_DIR / (
+                job_id + ".download"
+            )
 
             try:
+
                 extension = download_direct_video(
                     url,
                     temporary_path
                 )
 
-                final_path = UPLOAD_DIR / (job_id + extension)
+                final_path = UPLOAD_DIR / (
+                    job_id + extension
+                )
+
                 temporary_path.replace(final_path)
 
                 with LOCK:
@@ -1099,6 +1205,7 @@ class MailonClipHandler(BaseHTTPRequestHandler):
                     args=(job_id, final_path),
                     daemon=True
                 )
+
                 thread.start()
 
                 self.send_json({
@@ -1113,17 +1220,23 @@ class MailonClipHandler(BaseHTTPRequestHandler):
                 raise
 
         except json.JSONDecodeError:
+
             self.send_json(
                 {"error": "El formato de la solicitud no es válido."},
                 400
             )
+
         except ValueError as error:
+
             self.send_json(
                 {"error": str(error)},
                 400
             )
+
         except Exception as error:
+
             traceback.print_exc()
+
             self.send_json({
                 "error": "No se pudo procesar el enlace.",
                 "details": str(error)
