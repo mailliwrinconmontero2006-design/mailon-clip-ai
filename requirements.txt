@@ -2,3 +2,4 @@ faster-whisper
 scenedetect[opencv]
 imageio-ffmpeg
 numpy
+srt
