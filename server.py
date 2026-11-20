@@ -311,6 +311,34 @@ def download_direct_video(url, destination):
 # ==========================================
 # ANÁLISIS DEL CONTENIDO CON IA
 # ==========================================
+# MOTOR DE ANÁLISIS INTELIGENTE
+# ==========================================
+
+HOOK_WORDS = {
+    "increíble", "atención", "secreto", "descubrí",
+    "imagina", "sorpresa", "nadie", "jamás",
+    "nunca", "siempre", "importante", "resultado",
+    "verdad", "realmente", "exactamente", "finalmente",
+    "error", "éxito", "dinero", "problema", "solución"
+}
+
+STORY_WORDS = {
+    "historia", "entonces", "después", "recuerdo",
+    "pasó", "sucedió", "aprendí", "experiencia",
+    "momento", "principio", "finalmente"
+}
+
+ADVICE_WORDS = {
+    "consejo", "recomiendo", "debes", "deberías",
+    "aprende", "recuerda", "importante", "solución",
+    "evita", "necesitas", "puedes", "haz"
+}
+
+QUESTION_WORDS = {
+    "qué", "cómo", "cuándo", "dónde", "por",
+    "quién", "cuál", "cuánto"
+}
+
 
 def transcribe_video(video_path):
     if WhisperModel is None:
@@ -331,10 +359,15 @@ def transcribe_video(video_path):
     transcript = []
 
     for segment in segments:
+        text = segment.text.strip()
+
+        if not text:
+            continue
+
         transcript.append({
             "start": float(segment.start),
             "end": float(segment.end),
-            "text": segment.text.strip()
+            "text": text
         })
 
     return transcript
@@ -352,7 +385,9 @@ def score_window(start, end, transcript):
             relevant.append(segment)
 
     if not relevant:
-        return 0.1
+        return 0.0
+
+    relevant.sort(key=lambda item: item["start"])
 
     text = " ".join(
         item["text"] for item in relevant
@@ -361,7 +396,7 @@ def score_window(start, end, transcript):
     words = re.findall(r"\b\w+\b", text)
 
     if not words:
-        return 0.1
+        return 0.0
 
     speech_duration = sum(
         max(
@@ -374,35 +409,56 @@ def score_window(start, end, transcript):
 
     speech_density = min(
         speech_duration / CLIP_SECONDS,
-        1
+        1.0
     )
 
-    keyword_count = sum(
-        1 for word in words
-        if word in IMPORTANT_WORDS
-    )
-
-    keyword_score = min(
-        keyword_count / 8,
-        1
-    )
-
-    length_score = min(
+    word_count_score = min(
         len(words) / 100,
-        1
+        1.0
+    )
+
+    hook_score = min(
+        sum(1 for word in words if word in HOOK_WORDS) / 5,
+        1.0
+    )
+
+    story_score = min(
+        sum(1 for word in words if word in STORY_WORDS) / 4,
+        1.0
+    )
+
+    advice_score = min(
+        sum(1 for word in words if word in ADVICE_WORDS) / 4,
+        1.0
+    )
+
+    question_score = min(
+        sum(1 for word in words if word in QUESTION_WORDS) / 3,
+        1.0
+    )
+
+    punctuation_score = min(
+        (text.count("?") + text.count("!")) / 4,
+        1.0
     )
 
     sentence_score = min(
-        text.count(".") / 4,
-        1
+        (text.count(".") + text.count("!") + text.count("?")) / 6,
+        1.0
     )
 
-    return (
-        speech_density * 0.35
-        + keyword_score * 0.30
-        + length_score * 0.25
-        + sentence_score * 0.10
+    score = (
+        speech_density * 0.20
+        + word_count_score * 0.15
+        + hook_score * 0.20
+        + story_score * 0.15
+        + advice_score * 0.10
+        + question_score * 0.10
+        + punctuation_score * 0.05
+        + sentence_score * 0.05
     )
+
+    return round(score, 4)
 
 
 def select_best_moments(duration, transcript):
@@ -412,30 +468,55 @@ def select_best_moments(duration, transcript):
         )
 
     last_start = duration - CLIP_SECONDS
+    desired_count = int(duration // CLIP_SECONDS)
 
-    starts = list(range(
-        0,
-        int(last_start) + 1,
-        5
-    ))
+    # Selección alternativa cuando no hay transcripción.
+    if not transcript:
+        if desired_count == 1:
+            fallback_starts = [last_start / 2]
+        else:
+            fallback_starts = [
+                last_start * index / (desired_count - 1)
+                for index in range(desired_count)
+            ]
 
-    if not starts or starts[-1] != last_start:
-        starts.append(last_start)
+        return [
+            {
+                "start": round(start, 3),
+                "end": round(start + CLIP_SECONDS, 3),
+                "score": 0.0
+            }
+            for start in fallback_starts
+        ]
+
+    step = 5
+
+    starts = [
+        float(value)
+        for value in range(
+            0,
+            int(last_start) + 1,
+            step
+        )
+    ]
+
+    if not starts or starts[-1] < last_start:
+        starts.append(float(last_start))
 
     candidates = []
 
     for start in starts:
+        end = start + CLIP_SECONDS
+
         candidates.append({
-            "start": float(start),
-            "end": float(start + CLIP_SECONDS),
+            "start": start,
+            "end": end,
             "score": score_window(
                 start,
-                start + CLIP_SECONDS,
+                end,
                 transcript
             )
         })
-
-    desired_count = int(duration // CLIP_SECONDS)
 
     candidates.sort(
         key=lambda item: item["score"],
@@ -459,14 +540,35 @@ def select_best_moments(duration, transcript):
         if len(selected) >= desired_count:
             break
 
+    # Completar con fragmentos distintos si hace falta.
+    if len(selected) < desired_count:
+        for candidate in sorted(
+            candidates,
+            key=lambda item: item["start"]
+        ):
+            if candidate in selected:
+                continue
+
+            overlaps = any(
+                not (
+                    candidate["end"] <= chosen["start"]
+                    or candidate["start"] >= chosen["end"]
+                )
+                for chosen in selected
+            )
+
+            if not overlaps:
+                selected.append(candidate)
+
+            if len(selected) >= desired_count:
+                break
+
     selected.sort(
         key=lambda item: item["start"]
     )
 
     return selected
-
-
-# ==========================================
+    
 # CREACIÓN DE CLIPS DE 40 SEGUNDOS
 # ==========================================
 
