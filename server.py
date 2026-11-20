@@ -568,7 +568,54 @@ def select_best_moments(duration, transcript):
     )
 
     return selected
-    
+    # ==========================================
+# GENERADOR DE SUBTÍTULOS AUTOMÁTICOS
+# ==========================================
+
+def format_srt_time(seconds):
+    milliseconds = int(round(max(0, seconds) * 1000))
+
+    hours = milliseconds // 3600000
+    minutes = (milliseconds % 3600000) // 60000
+    seconds_part = (milliseconds % 60000) // 1000
+    milliseconds_part = milliseconds % 1000
+
+    return (
+        f"{hours:02d}:{minutes:02d}:"
+        f"{seconds_part:02d},{milliseconds_part:03d}"
+    )
+
+
+def create_subtitle_file(output_path, transcript, clip_start):
+    clip_end = clip_start + CLIP_SECONDS
+    subtitle_entries = []
+
+    for segment in transcript:
+        start = max(segment["start"], clip_start)
+        end = min(segment["end"], clip_end)
+
+        if end <= start:
+            continue
+
+        text = segment["text"].strip()
+
+        if not text:
+            continue
+
+        local_start = start - clip_start
+        local_end = end - clip_start
+
+        subtitle_entries.append(
+            f"{len(subtitle_entries) + 1}\n"
+            f"{format_srt_time(local_start)} --> "
+            f"{format_srt_time(local_end)}\n"
+            f"{text}\n"
+        )
+
+    output_path.write_text(
+        "\n".join(subtitle_entries),
+        encoding="utf-8"
+    )
 # CREACIÓN DE CLIPS DE 40 SEGUNDOS
 # ==========================================
 
