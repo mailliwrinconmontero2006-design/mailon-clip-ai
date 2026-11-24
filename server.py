@@ -69,24 +69,32 @@ HOOK_WORDS = {
     "imagina", "sorpresa", "nadie", "jamás",
     "nunca", "siempre", "importante", "resultado",
     "verdad", "realmente", "exactamente", "finalmente",
-    "error", "éxito", "dinero", "problema", "solución"
+    "error", "éxito", "dinero", "problema", "solución",
+    "ojo", "escucha", "fíjate", "brutal", "increíblemente"
 }
 
 STORY_WORDS = {
     "historia", "entonces", "después", "recuerdo",
     "pasó", "sucedió", "aprendí", "experiencia",
-    "momento", "principio", "finalmente"
+    "momento", "principio", "finalmente", "resulta",
+    "ocurrió", "viví", "conocí"
 }
 
 ADVICE_WORDS = {
     "consejo", "recomiendo", "debes", "deberías",
     "aprende", "recuerda", "importante", "solución",
-    "evita", "necesitas", "puedes", "haz"
+    "evita", "necesitas", "puedes", "haz",
+    "intenta", "procura", "nunca", "mejor"
 }
 
 QUESTION_WORDS = {
     "qué", "cómo", "cuándo", "dónde",
     "por", "quién", "cuál", "cuánto"
+}
+
+TRANSITION_WORDS = {
+    "pero", "porque", "aunque", "entonces",
+    "además", "sin embargo", "por eso", "así que"
 }
 
 
@@ -381,6 +389,13 @@ def transcribe_video(video_path):
 # ANÁLISIS INTELIGENTE DEL CONTENIDO
 # ==========================================
 
+def normalize_words(text):
+    return re.findall(
+        r"\b[\wáéíóúüñ]+\b",
+        text.lower()
+    )
+
+
 def score_window(start, end, transcript):
 
     relevant = []
@@ -402,7 +417,7 @@ def score_window(start, end, transcript):
         item["text"] for item in relevant
     ).lower()
 
-    words = re.findall(r"\b\w+\b", text)
+    words = normalize_words(text)
 
     if not words:
         return 0.0
@@ -422,6 +437,10 @@ def score_window(start, end, transcript):
     )
 
     word_count_score = min(len(words) / 100, 1.0)
+
+    unique_ratio = len(set(words)) / max(len(words), 1)
+
+    diversity_score = min(unique_ratio / 0.65, 1.0)
 
     hook_score = min(
         sum(1 for word in words if word in HOOK_WORDS) / 5,
@@ -453,18 +472,37 @@ def score_window(start, end, transcript):
         1.0
     )
 
+    transition_score = min(
+        sum(
+            1 for phrase in TRANSITION_WORDS
+            if phrase in text
+        ) / 3,
+        1.0
+    )
+
+    # Favorece segmentos con conversación suficiente,
+    # contenido interesante y variedad de palabras.
     score = (
-        speech_density * 0.20
-        + word_count_score * 0.15
+        speech_density * 0.18
+        + word_count_score * 0.12
         + hook_score * 0.20
-        + story_score * 0.15
+        + story_score * 0.14
         + advice_score * 0.10
-        + question_score * 0.10
-        + punctuation_score * 0.05
-        + sentence_score * 0.05
+        + question_score * 0.08
+        + punctuation_score * 0.06
+        + sentence_score * 0.04
+        + diversity_score * 0.04
+        + transition_score * 0.04
     )
 
     return round(score, 4)
+
+
+def intervals_overlap(first, second):
+    return not (
+        first["end"] <= second["start"]
+        or first["start"] >= second["end"]
+    )
 
 
 def select_best_moments(duration, transcript):
@@ -520,6 +558,7 @@ def select_best_moments(duration, transcript):
             "score": score_window(start, end, transcript)
         })
 
+    # Se ordenan primero los momentos con mayor puntuación.
     candidates.sort(
         key=lambda item: item["score"],
         reverse=True
@@ -527,22 +566,19 @@ def select_best_moments(duration, transcript):
 
     selected = []
 
+    # Primera selección: mejores puntuaciones sin solapamiento.
     for candidate in candidates:
 
-        overlaps = any(
-            not (
-                candidate["end"] <= chosen["start"]
-                or candidate["start"] >= chosen["end"]
-            )
+        if all(
+            not intervals_overlap(candidate, chosen)
             for chosen in selected
-        )
-
-        if not overlaps:
+        ):
             selected.append(candidate)
 
         if len(selected) >= desired_count:
             break
 
+    # Si faltan clips, se buscan ventanas alternativas.
     if len(selected) < desired_count:
 
         for candidate in sorted(
@@ -553,15 +589,10 @@ def select_best_moments(duration, transcript):
             if candidate in selected:
                 continue
 
-            overlaps = any(
-                not (
-                    candidate["end"] <= chosen["start"]
-                    or candidate["start"] >= chosen["end"]
-                )
+            if all(
+                not intervals_overlap(candidate, chosen)
                 for chosen in selected
-            )
-
-            if not overlaps:
+            ):
                 selected.append(candidate)
 
             if len(selected) >= desired_count:
